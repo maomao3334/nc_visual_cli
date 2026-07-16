@@ -1,0 +1,37 @@
+# Local tooling and editor state
+.agents/
+.codex/
+.codegraph/
+.idea/
+.vscode/
+
+# Python environments and caches
+.venv/
+.venv*/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build and release outputs
+build/
+dist/
+release/
+wheelhouse/
+*.whl
+
+# Generated reports
+nc_visual_reports/
+reports/
+*_report.html
+*_report/
+*_manifest.json
+batch_manifest.json
+
+# Operating system files
+.DS_Store
+Thumbs.db

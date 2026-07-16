@@ -1,0 +1,2 @@
+id,name,type,lon,lat,start_time,description
+fire-001,消防测试火点,fire,102.3600006,25.0400009,2024-04-03T20:00:00+08:00,用于离线风险扇区验收

@@ -1,0 +1,1463 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>风场态势研判</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1114;
+      --surface: #10191d;
+      --surface-strong: #152126;
+      --surface-soft: #0e171b;
+      --line: #2b3b42;
+      --line-soft: #1c2a30;
+      --text: #eef5f5;
+      --muted: #9db0b5;
+      --faint: #6f8389;
+      --cyan: #62d4cf;
+      --cyan-strong: #1aa7a0;
+      --teal-deep: #07545a;
+      --amber: #f0bd5b;
+      --risk: #f2545b;
+      --risk-soft: rgba(242, 84, 91, 0.16);
+      --focus: #b9fffb;
+      --missing: #536168;
+      --radius: 6px;
+      --control: 44px;
+      --shadow: 0 14px 36px rgba(0, 0, 0, 0.24);
+      --font-ui: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      --font-data: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    }
+
+    html[data-theme="light"] {
+      color-scheme: light;
+      --bg: #f3f6f5;
+      --surface: #ffffff;
+      --surface-strong: #eaf0ef;
+      --surface-soft: #f8faf9;
+      --line: #bdcac8;
+      --line-soft: #dce5e3;
+      --text: #142023;
+      --muted: #53666a;
+      --faint: #718286;
+      --cyan: #087f7a;
+      --cyan-strong: #0b8d87;
+      --teal-deep: #07545a;
+      --amber: #a86700;
+      --risk: #c62832;
+      --risk-soft: rgba(198, 40, 50, 0.12);
+      --focus: #005c59;
+      --missing: #819094;
+      --shadow: 0 14px 34px rgba(27, 47, 49, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); }
+
+    body {
+      font-family: var(--font-ui);
+      font-size: 14px;
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }
+
+    button, select, input { font: 600 13px/1 var(--font-ui); letter-spacing: 0; }
+
+    button, select {
+      min-height: var(--control);
+      color: var(--text);
+      background: var(--surface-strong);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+    }
+
+    button { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 7px; }
+    button:hover { border-color: var(--cyan); }
+    button:disabled { cursor: not-allowed; opacity: 0.42; }
+    button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible {
+      outline: 2px solid var(--focus);
+      outline-offset: 2px;
+    }
+
+    select { padding: 0 30px 0 10px; max-width: 190px; }
+
+    .icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: 0 0 auto; }
+
+    .app-shell { min-height: 100vh; display: grid; grid-template-rows: auto auto 1fr auto; }
+
+    .command-bar {
+      display: grid;
+      grid-template-columns: minmax(235px, 0.9fr) minmax(420px, 1.8fr) auto;
+      gap: 16px;
+      align-items: center;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+    }
+
+    .identity { min-width: 0; }
+    .identity h1 { margin: 0; font-size: 20px; line-height: 1.15; font-weight: 720; }
+    .source-line { margin-top: 7px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 12px/1.2 var(--font-data); }
+
+    .playback { min-width: 0; display: grid; grid-template-columns: auto minmax(180px, 1fr) auto; align-items: center; gap: 10px; }
+    .transport { display: inline-grid; grid-auto-flow: column; gap: 5px; }
+    .icon-button { width: var(--control); padding: 0; }
+
+    .timeline-wrap { min-width: 0; }
+    .timeline-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 7px; }
+    .time-value { font: 700 13px/1 var(--font-data); color: var(--text); }
+    .time-jump { color: var(--amber); font-size: 11px; min-height: 12px; }
+    .timeline-track { position: relative; height: 24px; margin: 0 7px; border-top: 2px solid var(--line); }
+    .timeline-marker { position: absolute; top: -7px; width: 14px; height: 14px; min-height: 14px; padding: 0; transform: translateX(-50%); border-radius: 50%; border: 2px solid var(--muted); background: var(--surface); }
+    .timeline-marker.has-data { border-color: var(--cyan); }
+    .timeline-marker.active { width: 18px; height: 18px; top: -9px; background: var(--cyan); border-color: var(--focus); box-shadow: 0 0 0 4px rgba(98, 212, 207, 0.13); }
+    .timeline-gap { position: absolute; top: -2px; height: 4px; background: repeating-linear-gradient(90deg, var(--amber) 0 5px, transparent 5px 9px); opacity: 0.8; }
+
+    .speed-control { display: inline-grid; grid-template-columns: repeat(3, 36px); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+    .speed-control button { min-height: 34px; border: 0; border-right: 1px solid var(--line); border-radius: 0; padding: 0; background: transparent; }
+    .speed-control button:last-child { border-right: 0; }
+    .speed-control button.active { background: var(--cyan-strong); color: #ffffff; }
+
+    .global-controls { display: grid; grid-template-columns: auto auto auto; gap: 7px; align-items: center; }
+    .control-field { display: grid; gap: 5px; }
+    .control-field label { color: var(--muted); font-size: 11px; }
+
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      min-height: 38px;
+      padding: 8px 18px;
+      border-bottom: 1px solid var(--line-soft);
+      background: var(--surface-soft);
+      color: var(--muted);
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+
+    .status-strip::-webkit-scrollbar { display: none; }
+
+    .status-item { display: inline-flex; align-items: center; gap: 7px; }
+    .status-item strong { color: var(--text); font-weight: 650; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); flex: 0 0 auto; }
+    .status-dot.amber { background: var(--amber); }
+    .status-dot.gray { background: var(--missing); }
+    .status-dot.risk { background: var(--risk); }
+
+    .workbench {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      grid-template-rows: minmax(440px, 60vh) minmax(250px, 31vh);
+      min-height: 0;
+    }
+
+    .map-panel { grid-column: 1; grid-row: 1; min-width: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--surface-soft); display: grid; grid-template-rows: auto minmax(0, 1fr); }
+    .panel-head { min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 1px solid var(--line-soft); }
+    .panel-title { margin: 0; font-size: 14px; font-weight: 700; }
+    .panel-meta { color: var(--muted); font: 11px/1.2 var(--font-data); }
+
+    .map-stage { position: relative; min-height: 0; overflow: hidden; background-color: var(--surface-soft); touch-action: pan-y; }
+    .map-stage canvas { display: block; width: 100%; height: 100%; }
+    .map-toolbar { position: absolute; top: 12px; right: 12px; display: grid; gap: 5px; z-index: 4; }
+    .map-toolbar .icon-button { width: 40px; min-height: 40px; background: color-mix(in srgb, var(--surface) 88%, transparent); box-shadow: var(--shadow); }
+
+    .legend {
+      position: absolute;
+      left: 13px;
+      bottom: 12px;
+      width: min(300px, calc(100% - 26px));
+      padding: 9px 10px;
+      background: color-mix(in srgb, var(--surface) 91%, transparent);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      box-shadow: var(--shadow);
+      z-index: 3;
+    }
+
+    .legend-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 11px; }
+    .speed-ramp { height: 7px; margin: 7px 0 5px; background: linear-gradient(90deg, #d8eff0, #4cb8af, #047a78, #063f4a); border: 1px solid color-mix(in srgb, var(--line) 75%, transparent); }
+    .legend-keys { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; color: var(--muted); font-size: 11px; }
+    .legend-key { display: inline-flex; align-items: center; gap: 5px; }
+    .key-mark { width: 13px; height: 9px; border: 1px solid currentColor; }
+    .key-mark.low { color: var(--amber); background: repeating-linear-gradient(135deg, transparent 0 3px, currentColor 3px 4px); }
+    .key-mark.missing { color: var(--missing); background: transparent; border-style: dashed; }
+    .key-mark.risk { color: var(--risk); background: var(--risk-soft); }
+
+    .side-rail { grid-column: 2; grid-row: 1; min-width: 0; border-bottom: 1px solid var(--line); background: var(--surface); overflow: auto; }
+    .rail-section { padding: 14px 16px; border-bottom: 1px solid var(--line-soft); }
+    .rail-section:last-child { border-bottom: 0; }
+    .rail-section h2 { margin: 0 0 10px; font-size: 14px; }
+    .brief-lines { display: grid; gap: 8px; font-size: 14px; line-height: 1.55; }
+    .brief-line { margin: 0; }
+    .brief-line.emphasis { color: var(--cyan); font-weight: 700; }
+    .brief-line.warning { color: var(--amber); }
+    .caveat { margin: 12px 0 0; padding-left: 10px; border-left: 3px solid var(--risk); color: var(--muted); font-size: 12px; line-height: 1.5; }
+
+    .point-details { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; font: 12px/1.35 var(--font-data); }
+    .point-details dt { color: var(--muted); }
+    .point-details dd { margin: 0; text-align: right; color: var(--text); }
+
+    .rose-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .direction-control { display: inline-grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
+    .direction-control button { min-height: 34px; border: 0; border-right: 1px solid var(--line); border-radius: 0; padding: 0 10px; background: transparent; }
+    .direction-control button:last-child { border-right: 0; }
+    .direction-control button.active { color: #ffffff; background: var(--cyan-strong); }
+    #windRose { width: 100%; height: 230px; display: block; }
+    .rose-info { min-height: 18px; color: var(--muted); font-size: 11px; text-align: center; }
+
+    .lower-analysis { grid-column: 1 / 3; grid-row: 2; display: grid; grid-template-columns: 1fr 1fr; min-width: 0; background: var(--surface); }
+    .chart-panel { min-width: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); border-right: 1px solid var(--line); }
+    .chart-panel:last-child { border-right: 0; }
+    .chart-stage { min-height: 0; position: relative; }
+    .chart-stage canvas { display: block; width: 100%; height: 100%; }
+
+    .mobile-tabs { display: none; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 0 0 10px; }
+    .mobile-tabs button { min-height: 42px; padding: 0 7px; }
+    .mobile-tabs button.active { background: var(--cyan-strong); color: #ffffff; }
+
+    .footer {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 18px;
+      border-top: 1px solid var(--line);
+      color: var(--faint);
+      background: var(--surface-soft);
+      font-size: 11px;
+    }
+
+    .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+    @media (max-width: 1080px) {
+      .command-bar { grid-template-columns: 1fr; gap: 10px; position: static; }
+      .identity { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: baseline; }
+      .source-line { margin: 0; }
+      .global-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .global-controls select { width: 100%; max-width: none; }
+      .workbench { grid-template-columns: minmax(0, 1fr) 310px; }
+    }
+
+    @media (max-width: 820px) {
+      .status-strip { padding-inline: 12px; gap: 12px; }
+      .workbench { display: grid; grid-template-columns: 1fr; grid-template-rows: minmax(420px, 58vh) auto auto; }
+      .map-panel { grid-column: 1; grid-row: 1; border-right: 0; }
+      .side-rail { grid-column: 1; grid-row: 2; border-right: 0; overflow: visible; }
+      .lower-analysis { grid-column: 1; grid-row: 3; }
+    }
+
+    @media (max-width: 620px) {
+      :root { --control: 46px; }
+      .command-bar { padding: 11px 12px; }
+      .identity { display: block; }
+      .identity h1 { font-size: 18px; }
+      .source-line { margin-top: 6px; }
+      .playback { grid-template-columns: auto minmax(0, 1fr); }
+      .speed-control { grid-column: 1 / 3; width: 100%; grid-template-columns: repeat(3, 1fr); }
+      .speed-control button, .direction-control button, .mobile-tabs button { min-height: 44px; }
+      .map-toolbar .icon-button { width: 44px; min-height: 44px; }
+      .global-controls { grid-template-columns: 1fr 1fr; }
+      .control-field:first-child { grid-column: 1 / 3; }
+      .workbench { grid-template-rows: minmax(390px, 56vh) auto auto; }
+      .lower-analysis { display: contents; }
+      .chart-panel { min-height: 300px; border-right: 0; border-top: 1px solid var(--line); }
+      .mobile-tabs { display: grid; }
+      [data-mobile-panel] { display: none; }
+      [data-mobile-panel].mobile-active { display: grid; }
+      .rail-section[data-mobile-panel].mobile-active { display: block; }
+      .legend { width: calc(100% - 24px); left: 12px; bottom: 10px; }
+      .footer { display: block; line-height: 1.5; }
+      .footer span { display: block; }
+    }
+
+    @media (max-height: 520px) and (orientation: landscape) {
+      .command-bar { position: static; grid-template-columns: minmax(200px, 0.75fr) minmax(390px, 1.5fr) auto; padding: 7px 10px; }
+      .identity h1 { font-size: 16px; }
+      .source-line { display: none; }
+      .global-controls .control-field:nth-child(2), .global-controls .control-field:nth-child(3) { display: none; }
+      .status-strip { min-height: 30px; padding: 5px 10px; }
+      .workbench { grid-template-columns: minmax(0, 68%) minmax(260px, 32%); grid-template-rows: minmax(330px, calc(100vh - 126px)) auto; }
+      .map-panel { grid-column: 1; grid-row: 1 / 3; border-right: 1px solid var(--line); }
+      .side-rail { grid-column: 2; grid-row: 1; max-height: calc(100vh - 126px); overflow: auto; }
+      .lower-analysis { grid-column: 2; grid-row: 2; display: contents; }
+      .chart-panel { min-height: 260px; }
+      .footer { display: none; }
+    }
+
+    @media print {
+      :root { color-scheme: light; }
+      html { --bg: #ffffff; --surface: #ffffff; --surface-strong: #eef3f2; --surface-soft: #ffffff; --line: #9eaeac; --line-soft: #d4dddd; --text: #0d1719; --muted: #44575b; --faint: #687a7e; --cyan: #087f7a; --risk: #b71c2a; }
+      .command-bar { position: static; box-shadow: none; }
+      .transport, .speed-control, .global-controls, .map-toolbar, .mobile-tabs { display: none !important; }
+      .workbench { grid-template-rows: 460px 260px; }
+      .legend { box-shadow: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="command-bar">
+      <div class="identity">
+        <h1>风场态势研判</h1>
+        <div class="source-line" id="sourceName"></div>
+      </div>
+      <div class="playback" aria-label="时间播放控制">
+        <div class="transport">
+          <button class="icon-button" id="previousTime" type="button" title="上一时次" aria-label="上一时次">
+            <svg class="icon" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+          <button class="icon-button" id="playPause" type="button" title="播放" aria-label="播放">
+            <svg class="icon" id="playIcon" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></svg>
+          </button>
+          <button class="icon-button" id="nextTime" type="button" title="下一时次" aria-label="下一时次">
+            <svg class="icon" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
+          </button>
+        </div>
+        <div class="timeline-wrap">
+          <div class="timeline-head">
+            <span class="time-value" id="timeValue"></span>
+            <span class="time-jump" id="timeJump"></span>
+          </div>
+          <div class="timeline-track" id="timelineTrack" aria-label="真实观测时间轴"></div>
+        </div>
+        <div class="speed-control" aria-label="播放速度">
+          <button type="button" data-speed="1" class="active">1x</button>
+          <button type="button" data-speed="2">2x</button>
+          <button type="button" data-speed="5">5x</button>
+        </div>
+      </div>
+      <div class="global-controls">
+        <div class="control-field">
+          <label for="heightSelect">高度层</label>
+          <select id="heightSelect"></select>
+        </div>
+        <div class="control-field">
+          <label for="themeSelect">显示主题</label>
+          <select id="themeSelect">
+            <option value="dark">深色作战屏</option>
+            <option value="light">浅色导出</option>
+            <option value="auto">跟随系统</option>
+          </select>
+        </div>
+        <button class="icon-button" id="motionToggle" type="button" title="切换减弱动效" aria-label="切换减弱动效" aria-pressed="false">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M2 12h3l3-9 4 18 3-9h7"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="status-strip" role="status" aria-live="polite">
+      <span class="status-item"><span class="status-dot" id="offlineDot"></span><strong>离线报告</strong><span>无联网依赖</span></span>
+      <span class="status-item"><span class="status-dot" id="qualityDot"></span><strong id="qualityLabel"></strong><span id="qualityDetail"></span></span>
+      <span class="status-item"><strong>当前层</strong><span id="layerSummary"></span></span>
+      <span class="status-item"><strong>高度基准</strong><span id="heightDatum"></span></span>
+      <span class="status-item"><strong>时区</strong><span id="timezoneLabel"></span></span>
+    </div>
+
+    <main class="workbench">
+      <section class="map-panel" aria-labelledby="mapTitle">
+        <div class="panel-head">
+          <div>
+            <h2 class="panel-title" id="mapTitle">水平风场与下风向研判</h2>
+            <div class="panel-meta" id="mapMeta"></div>
+          </div>
+          <div class="panel-meta">箭头表示实际吹向</div>
+        </div>
+        <div class="map-stage" id="mapStage">
+          <canvas id="mapCanvas" tabindex="0" role="img" aria-label="水平风场地图"></canvas>
+          <div class="map-toolbar" aria-label="地图缩放控制">
+            <button class="icon-button" id="zoomIn" type="button" title="放大" aria-label="放大地图"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/></svg></button>
+            <button class="icon-button" id="zoomOut" type="button" title="缩小" aria-label="缩小地图"><svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3M8 11h6"/></svg></button>
+            <button class="icon-button" id="zoomReset" type="button" title="重置视图" aria-label="重置地图"><svg class="icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg></button>
+          </div>
+          <div class="legend" aria-label="地图图例">
+            <div class="legend-row"><span>风速</span><span id="legendMaximum"></span></div>
+            <div class="speed-ramp"></div>
+            <div class="legend-row"><span>0 m/s</span><span id="legendMiddle"></span><span id="legendEnd"></span></div>
+            <div class="legend-keys">
+              <span class="legend-key"><span class="key-mark low"></span>低邻点支持</span>
+              <span class="legend-key"><span class="key-mark missing"></span>无数据</span>
+              <span class="legend-key"><span class="key-mark risk"></span>研判扇区</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <aside class="side-rail">
+        <section class="rail-section" aria-labelledby="briefTitle">
+          <h2 id="briefTitle">一线短报文</h2>
+          <div class="brief-lines" id="briefLines"></div>
+          <p class="caveat">风险图层只表达理论平流方向与距离，供部署研判参考；不是化学扩散模型、撤离边界或安全区。</p>
+        </section>
+        <section class="rail-section" aria-labelledby="pointTitle">
+          <h2 id="pointTitle">格点与来源</h2>
+          <dl class="point-details" id="pointDetails"></dl>
+        </section>
+        <div class="rail-section">
+          <div class="mobile-tabs" aria-label="分析视图">
+            <button type="button" data-mobile-tab="rose" class="active">风玫瑰</button>
+            <button type="button" data-mobile-tab="profile">风场剖面</button>
+            <button type="button" data-mobile-tab="coverage">观测覆盖</button>
+          </div>
+        </div>
+        <section class="rail-section mobile-active" data-mobile-panel="rose" aria-labelledby="roseTitle">
+          <div class="rose-head">
+            <h2 id="roseTitle">滚动风玫瑰</h2>
+            <div class="direction-control" aria-label="风向口径">
+              <button type="button" data-direction="flow" class="active">实际吹向</button>
+              <button type="button" data-direction="meteorological">气象来向</button>
+            </div>
+          </div>
+          <svg id="windRose" viewBox="0 0 280 230" role="img" aria-label="滚动历史窗口风玫瑰"></svg>
+          <div class="rose-info" id="roseInfo"></div>
+        </section>
+      </aside>
+
+      <section class="lower-analysis">
+        <section class="chart-panel" data-mobile-panel="profile" aria-labelledby="profileTitle">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="profileTitle">时间－高度风场剖面</h2>
+              <div class="panel-meta">颜色为有效格点平均风速，空白表示缺测</div>
+            </div>
+          </div>
+          <div class="chart-stage"><canvas id="profileCanvas" tabindex="0" role="img" aria-label="时间高度风速剖面"></canvas></div>
+        </section>
+        <section class="chart-panel" data-mobile-panel="coverage" aria-labelledby="coverageTitle">
+          <div class="panel-head">
+            <div>
+              <h2 class="panel-title" id="coverageTitle">观测覆盖与质量</h2>
+              <div class="panel-meta">观测数越高颜色越亮，琥珀叠色表示低邻点支持占主导</div>
+            </div>
+          </div>
+          <div class="chart-stage"><canvas id="coverageCanvas" tabindex="0" role="img" aria-label="时间高度观测覆盖图"></canvas></div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span id="methodNote"></span>
+      <span id="generatedAt"></span>
+    </footer>
+    <div class="sr-only" id="accessibleSummary" aria-live="polite"></div>
+  </div>
+
+  <script>window.__NCV_BOOTSTRAP__={{ bootstrap_json|safe }};window.__NCV_FRAME_CHUNKS__=[];</script>
+  {% for script_path in chunk_scripts %}<script src="{{ script_path }}"></script>{% endfor %}
+  <script>
+    (() => {
+      "use strict";
+
+      const boot = window.__NCV_BOOTSTRAP__;
+      const analysis = boot.analysis;
+      analysis.frames = Object.assign({}, analysis.frames || {}, ...window.__NCV_FRAME_CHUNKS__);
+      const manifest = boot.manifest;
+      const frames = analysis.frames;
+      const times = analysis.coordinates.time;
+      const heights = analysis.coordinates.height_m;
+      const latitudes = analysis.coordinates.lat;
+      const longitudes = analysis.coordinates.lon;
+      const timeHeight = analysis.time_height;
+      const config = manifest.config;
+      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+      const state = {
+        time: analysis.default_time_index,
+        height: analysis.default_height_index,
+        playing: false,
+        speed: 1,
+        directionMode: "flow",
+        theme: config.default_theme || "dark",
+        reduceMotion: prefersReduced.matches,
+        selectedPoint: null,
+        mobilePanel: "rose",
+        map: { zoom: 1, offsetX: 0, offsetY: 0 },
+      };
+      let playbackTimer = null;
+      let mapGeometry = null;
+      let dragState = null;
+      let touchPinch = null;
+      const colors = {
+        text: () => css("--text"),
+        muted: () => css("--muted"),
+        faint: () => css("--faint"),
+        line: () => css("--line"),
+        lineSoft: () => css("--line-soft"),
+        surface: () => css("--surface-soft"),
+        cyan: () => css("--cyan"),
+        amber: () => css("--amber"),
+        risk: () => css("--risk"),
+        missing: () => css("--missing"),
+      };
+
+      const elements = Object.fromEntries([
+        "sourceName", "previousTime", "playPause", "playIcon", "nextTime", "timeValue",
+        "timeJump", "timelineTrack", "heightSelect", "themeSelect", "motionToggle",
+        "qualityDot", "qualityLabel", "qualityDetail", "layerSummary", "heightDatum",
+        "timezoneLabel", "mapMeta", "mapCanvas", "mapStage", "zoomIn", "zoomOut",
+        "zoomReset", "legendMaximum", "legendMiddle", "legendEnd", "briefLines",
+        "pointDetails", "windRose", "roseInfo", "profileCanvas", "coverageCanvas",
+        "methodNote", "generatedAt", "accessibleSummary"
+      ].map(id => [id, document.getElementById(id)]));
+
+      function css(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      function currentFrame() {
+        return frames[`${state.time}:${state.height}`] || null;
+      }
+
+      function heightLabel(index) {
+        const datum = analysis.height_datum === "UNKNOWN" ? "高度基准未知" : analysis.height_datum;
+        return `${formatNumber(heights[index], 0)} m ${datum}`;
+      }
+
+      function formatNumber(value, digits = 1) {
+        if (value === null || value === undefined || !Number.isFinite(Number(value))) return "—";
+        return Number(value).toFixed(digits);
+      }
+
+      function directionName(value) {
+        const names = ["北", "北东北", "东北", "东东北", "东", "东东南", "东南", "南东南", "南", "南西南", "西南", "西西南", "西", "西西北", "西北", "北西北"];
+        return names[Math.floor((value + 11.25) / 22.5) % 16];
+      }
+
+      function parseHash() {
+        const values = new URLSearchParams(location.hash.replace(/^#/, ""));
+        const time = values.has("t") ? Number(values.get("t")) : NaN;
+        const height = values.has("h") ? Number(values.get("h")) : NaN;
+        if (Number.isInteger(time) && time >= 0 && time < times.length) state.time = time;
+        if (Number.isInteger(height) && height >= 0 && height < heights.length) state.height = height;
+        if (["flow", "meteorological"].includes(values.get("dir"))) state.directionMode = values.get("dir");
+        if (["dark", "light", "auto"].includes(values.get("theme"))) state.theme = values.get("theme");
+        if (["rose", "profile", "coverage"].includes(values.get("panel"))) state.mobilePanel = values.get("panel");
+        const point = values.has("point") ? Number(values.get("point")) : NaN;
+        if (Number.isInteger(point) && point >= 0) state.selectedPoint = point;
+      }
+
+      function writeHash() {
+        const values = new URLSearchParams();
+        values.set("t", String(state.time));
+        values.set("h", String(state.height));
+        values.set("dir", state.directionMode);
+        values.set("theme", state.theme);
+        values.set("panel", state.mobilePanel);
+        if (state.selectedPoint !== null) values.set("point", String(state.selectedPoint));
+        const next = `#${values.toString()}`;
+        if (location.hash !== next) history.replaceState(null, "", next);
+      }
+
+      function resolveTheme() {
+        if (state.theme === "auto") {
+          return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+        }
+        return state.theme;
+      }
+
+      function applyTheme() {
+        document.documentElement.dataset.theme = resolveTheme();
+        elements.themeSelect.value = state.theme;
+      }
+
+      function activeHeightIndices() {
+        const available = new Set();
+        Object.keys(frames).forEach(key => {
+          const [timeIndex, heightIndex] = key.split(":").map(Number);
+          if (timeIndex === state.time) available.add(heightIndex);
+        });
+        if (!available.size) available.add(state.height);
+        const ordered = [...available].sort((a, b) => heights[a] - heights[b]);
+        if (ordered.length <= 48) {
+          available.add(state.height);
+          return [...available].sort((a, b) => heights[a] - heights[b]);
+        }
+        const selected = new Set([state.height]);
+        [...ordered]
+          .sort((left, right) => timeHeight.coverage[state.time][right] - timeHeight.coverage[state.time][left])
+          .slice(0, 16)
+          .forEach(index => selected.add(index));
+        for (let position = 0; position < 32; position += 1) {
+          selected.add(ordered[Math.round(position / 31 * (ordered.length - 1))]);
+        }
+        return [...selected].sort((a, b) => heights[a] - heights[b]);
+      }
+
+      function buildHeightOptions() {
+        elements.heightSelect.replaceChildren();
+        activeHeightIndices().forEach(index => {
+          const option = document.createElement("option");
+          option.value = String(index);
+          const observationCount = timeHeight.coverage[state.time][index] || 0;
+          option.textContent = `${heightLabel(index)} · 观测 ${observationCount}`;
+          elements.heightSelect.append(option);
+        });
+        elements.heightSelect.value = String(state.height);
+      }
+
+      function timePosition(index) {
+        if (times.length <= 1) return 50;
+        const start = times[0].epoch_ms;
+        const end = times[times.length - 1].epoch_ms;
+        if (end <= start) return index / (times.length - 1) * 100;
+        return (times[index].epoch_ms - start) / (end - start) * 100;
+      }
+
+      function buildTimeline() {
+        elements.timelineTrack.replaceChildren();
+        const median = analysis.coordinates.median_time_step_ms || 0;
+        for (let index = 0; index < times.length; index += 1) {
+          const marker = document.createElement("button");
+          marker.type = "button";
+          marker.className = "timeline-marker";
+          marker.style.left = `${timePosition(index)}%`;
+          marker.dataset.timeIndex = String(index);
+          marker.title = times[index].label;
+          marker.setAttribute("aria-label", `选择时次 ${times[index].label}`);
+          if (Object.keys(frames).some(key => key.startsWith(`${index}:`))) marker.classList.add("has-data");
+          if (index === state.time) marker.classList.add("active");
+          marker.addEventListener("click", () => setTime(index));
+          elements.timelineTrack.append(marker);
+          if (index < times.length - 1 && median > 0) {
+            const delta = times[index + 1].epoch_ms - times[index].epoch_ms;
+            if (delta > median * 1.5) {
+              const gap = document.createElement("span");
+              gap.className = "timeline-gap";
+              const left = timePosition(index);
+              const right = timePosition(index + 1);
+              gap.style.left = `${left}%`;
+              gap.style.width = `${Math.max(0, right - left)}%`;
+              gap.title = `无观测时段 ${formatDuration(delta)}`;
+              elements.timelineTrack.append(gap);
+            }
+          }
+        }
+      }
+
+      function formatDuration(milliseconds) {
+        const minutes = Math.round(milliseconds / 60000);
+        if (minutes >= 60) return `${Math.floor(minutes / 60)} 小时 ${minutes % 60} 分钟`;
+        return `${minutes} 分钟`;
+      }
+
+      function setTime(index) {
+        const next = Math.max(0, Math.min(times.length - 1, index));
+        if (next === state.time) return;
+        const previous = state.time;
+        state.time = next;
+        state.selectedPoint = null;
+        buildHeightOptions();
+        const delta = Math.abs(times[next].epoch_ms - times[previous].epoch_ms);
+        const median = analysis.coordinates.median_time_step_ms || 0;
+        elements.timeJump.textContent = median && delta > median * 1.5 ? `跨越无观测时段 ${formatDuration(delta)}` : "";
+        renderAll(true);
+      }
+
+      function setHeight(index) {
+        state.height = Number(index);
+        state.selectedPoint = null;
+        renderAll(true);
+      }
+
+      function playbackDelay() {
+        return { 1: 1200, 2: 600, 5: 240 }[state.speed];
+      }
+
+      function schedulePlayback() {
+        clearTimeout(playbackTimer);
+        if (!state.playing || times.length <= 1) return;
+        playbackTimer = setTimeout(() => {
+          const next = state.time >= times.length - 1 ? 0 : state.time + 1;
+          setTime(next);
+          schedulePlayback();
+        }, playbackDelay());
+      }
+
+      function setPlaying(playing) {
+        state.playing = playing && times.length > 1;
+        elements.playPause.setAttribute("aria-label", state.playing ? "暂停" : "播放");
+        elements.playPause.title = state.playing ? "暂停" : "播放";
+        elements.playIcon.innerHTML = state.playing ? '<path d="M9 5v14M15 5v14"/>' : '<path d="m8 5 11 7-11 7z"/>';
+        schedulePlayback();
+      }
+
+      function resizeCanvas(canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const ratio = Math.min(window.devicePixelRatio || 1, innerWidth < 700 ? 2 : 2.5);
+        const width = Math.max(1, Math.round(rect.width * ratio));
+        const height = Math.max(1, Math.round(rect.height * ratio));
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+        const context = canvas.getContext("2d");
+        context.setTransform(ratio, 0, 0, ratio, 0, 0);
+        return { context, width: rect.width, height: rect.height, ratio };
+      }
+
+      function colorRamp(value, maximum) {
+        const ratio = Math.max(0, Math.min(1, maximum > 0 ? value / maximum : 0));
+        const stops = [
+          [216, 239, 240],
+          [76, 184, 175],
+          [4, 122, 120],
+          [6, 63, 74],
+        ];
+        const scaled = ratio * (stops.length - 1);
+        const left = Math.floor(scaled);
+        const right = Math.min(stops.length - 1, left + 1);
+        const mix = scaled - left;
+        const rgb = stops[left].map((channel, index) => Math.round(channel + (stops[right][index] - channel) * mix));
+        return `rgb(${rgb.join(",")})`;
+      }
+
+      function extractLines(geojson) {
+        const lines = [];
+        function visit(value) {
+          if (!value) return;
+          if (value.type === "FeatureCollection") value.features.forEach(visit);
+          else if (value.type === "Feature") visit(value.geometry);
+          else if (value.type === "LineString") lines.push(value.coordinates);
+          else if (value.type === "MultiLineString") value.coordinates.forEach(line => lines.push(line));
+          else if (value.type === "Polygon") value.coordinates.forEach(line => lines.push(line));
+          else if (value.type === "MultiPolygon") value.coordinates.forEach(polygon => polygon.forEach(line => lines.push(line)));
+        }
+        visit(geojson);
+        return lines.map(line => {
+          const lon = line.map(point => Number(point[0]));
+          const lat = line.map(point => Number(point[1]));
+          return { points: line, minLon: Math.min(...lon), maxLon: Math.max(...lon), minLat: Math.min(...lat), maxLat: Math.max(...lat) };
+        });
+      }
+
+      const basemapLines = extractLines(boot.basemap);
+      const taskLines = extractLines(boot.task_boundary);
+
+      function mapLayout(width, height) {
+        const margin = { left: 48, right: 20, top: 18, bottom: 38 };
+        const plot = { x: margin.left, y: margin.top, width: Math.max(10, width - margin.left - margin.right), height: Math.max(10, height - margin.top - margin.bottom) };
+        const minLon = Math.min(...longitudes);
+        const maxLon = Math.max(...longitudes);
+        const minLat = Math.min(...latitudes);
+        const maxLat = Math.max(...latitudes);
+        const lonPadding = Math.max((maxLon - minLon) * 0.03, 0.001);
+        const latPadding = Math.max((maxLat - minLat) * 0.03, 0.001);
+        const bounds = { minLon: minLon - lonPadding, maxLon: maxLon + lonPadding, minLat: minLat - latPadding, maxLat: maxLat + latPadding };
+        function basePoint(lon, lat) {
+          const x = plot.x + (lon - bounds.minLon) / (bounds.maxLon - bounds.minLon) * plot.width;
+          const y = plot.y + (bounds.maxLat - lat) / (bounds.maxLat - bounds.minLat) * plot.height;
+          return { x, y };
+        }
+        function project(lon, lat) {
+          const point = basePoint(lon, lat);
+          const centerX = plot.x + plot.width / 2;
+          const centerY = plot.y + plot.height / 2;
+          return {
+            x: centerX + (point.x - centerX) * state.map.zoom + state.map.offsetX,
+            y: centerY + (point.y - centerY) * state.map.zoom + state.map.offsetY,
+          };
+        }
+        return { margin, plot, bounds, project };
+      }
+
+      function drawGeoLines(context, geometry, layout, color, width, dashed = false) {
+        context.save();
+        context.beginPath();
+        context.rect(layout.plot.x, layout.plot.y, layout.plot.width, layout.plot.height);
+        context.clip();
+        context.strokeStyle = color;
+        context.lineWidth = width;
+        context.setLineDash(dashed ? [7, 5] : []);
+        geometry.forEach(line => {
+          if (line.maxLon < layout.bounds.minLon || line.minLon > layout.bounds.maxLon || line.maxLat < layout.bounds.minLat || line.minLat > layout.bounds.maxLat) return;
+          context.beginPath();
+          line.points.forEach((point, index) => {
+            const screen = layout.project(Number(point[0]), Number(point[1]));
+            if (index === 0) context.moveTo(screen.x, screen.y);
+            else context.lineTo(screen.x, screen.y);
+          });
+          context.stroke();
+        });
+        context.restore();
+      }
+
+      function drawGrid(context, layout) {
+        context.save();
+        context.strokeStyle = colors.lineSoft();
+        context.fillStyle = colors.muted();
+        context.lineWidth = 1;
+        context.font = "11px Segoe UI, Microsoft YaHei UI, sans-serif";
+        context.textAlign = "center";
+        context.textBaseline = "top";
+        for (let index = 0; index <= 4; index += 1) {
+          const lon = layout.bounds.minLon + (layout.bounds.maxLon - layout.bounds.minLon) * index / 4;
+          const top = layout.project(lon, layout.bounds.maxLat);
+          const bottom = layout.project(lon, layout.bounds.minLat);
+          context.beginPath(); context.moveTo(top.x, layout.plot.y); context.lineTo(bottom.x, layout.plot.y + layout.plot.height); context.stroke();
+          context.fillText(`${lon.toFixed(2)}°E`, top.x, layout.plot.y + layout.plot.height + 8);
+        }
+        context.textAlign = "right";
+        context.textBaseline = "middle";
+        for (let index = 0; index <= 4; index += 1) {
+          const lat = layout.bounds.minLat + (layout.bounds.maxLat - layout.bounds.minLat) * index / 4;
+          const left = layout.project(layout.bounds.minLon, lat);
+          context.beginPath(); context.moveTo(layout.plot.x, left.y); context.lineTo(layout.plot.x + layout.plot.width, left.y); context.stroke();
+          context.fillText(`${lat.toFixed(2)}°N`, layout.plot.x - 7, left.y);
+        }
+        context.restore();
+      }
+
+      function drawArrow(context, x, y, direction, lowQuality) {
+        const radians = direction * Math.PI / 180;
+        const length = 14;
+        const dx = Math.sin(radians) * length;
+        const dy = -Math.cos(radians) * length;
+        context.save();
+        context.strokeStyle = lowQuality ? colors.amber() : colors.text();
+        context.fillStyle = context.strokeStyle;
+        context.lineWidth = 1.6;
+        context.beginPath();
+        context.moveTo(x - dx * 0.45, y - dy * 0.45);
+        context.lineTo(x + dx * 0.55, y + dy * 0.55);
+        context.stroke();
+        const tipX = x + dx * 0.55;
+        const tipY = y + dy * 0.55;
+        context.translate(tipX, tipY);
+        context.rotate(radians);
+        context.beginPath(); context.moveTo(0, -5); context.lineTo(-3.7, 2.5); context.lineTo(3.7, 2.5); context.closePath(); context.fill();
+        context.restore();
+      }
+
+      function haversine(lon1, lat1, lon2, lat2) {
+        const toRad = Math.PI / 180;
+        const dLat = (lat2 - lat1) * toRad;
+        const dLon = (lon2 - lon1) * toRad;
+        const left = lat1 * toRad;
+        const right = lat2 * toRad;
+        const value = Math.sin(dLat / 2) ** 2 + Math.cos(left) * Math.cos(right) * Math.sin(dLon / 2) ** 2;
+        return 6371.0088 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
+      }
+
+      function nearestFramePoint(frame, lon, lat) {
+        if (!frame) return null;
+        let best = null;
+        frame.point_index.forEach((pointIndex, frameIndex) => {
+          const latIndex = Math.floor(pointIndex / longitudes.length);
+          const lonIndex = pointIndex % longitudes.length;
+          const distance = haversine(lon, lat, longitudes[lonIndex], latitudes[latIndex]);
+          if (!best || distance < best.distance) best = { pointIndex, frameIndex, latIndex, lonIndex, distance };
+        });
+        return best;
+      }
+
+      function riskSector(event, frame) {
+        const nearest = nearestFramePoint(frame, event.lon, event.lat);
+        if (!nearest || nearest.distance > config.max_event_wind_distance_km) return null;
+        const quality = frame.quality ? frame.quality[nearest.frameIndex] : 0;
+        if (quality <= 0) return null;
+        const speed = frame.speed[nearest.frameIndex];
+        return {
+          direction: frame.flow_direction[nearest.frameIndex],
+          radiusKm: speed * config.risk_horizon_min * 60 / 1000,
+          width: quality >= 2 ? 30 : 60,
+          dashed: quality < 2,
+          supportDistance: nearest.distance,
+        };
+      }
+
+      function drawRiskSector(context, layout, event, sector) {
+        if (!sector) return;
+        const center = layout.project(event.lon, event.lat);
+        const start = sector.direction - sector.width / 2;
+        const end = sector.direction + sector.width / 2;
+        context.save();
+        context.beginPath();
+        context.moveTo(center.x, center.y);
+        for (let angle = start; angle <= end + 0.1; angle += Math.max(2, sector.width / 20)) {
+          const radians = angle * Math.PI / 180;
+          const northKm = Math.cos(radians) * sector.radiusKm;
+          const eastKm = Math.sin(radians) * sector.radiusKm;
+          const lat = event.lat + northKm / 111.32;
+          const lon = event.lon + eastKm / (111.32 * Math.max(0.2, Math.cos(event.lat * Math.PI / 180)));
+          const point = layout.project(lon, lat);
+          context.lineTo(point.x, point.y);
+        }
+        context.closePath();
+        context.fillStyle = "rgba(242,84,91,0.16)";
+        context.strokeStyle = colors.risk();
+        context.lineWidth = 2;
+        context.setLineDash(sector.dashed ? [7, 5] : []);
+        context.fill(); context.stroke();
+        const labelRadians = sector.direction * Math.PI / 180;
+        const labelDistance = sector.radiusKm * 0.55;
+        const labelLat = event.lat + Math.cos(labelRadians) * labelDistance / 111.32;
+        const labelLon = event.lon + Math.sin(labelRadians) * labelDistance / (111.32 * Math.max(0.2, Math.cos(event.lat * Math.PI / 180)));
+        const label = layout.project(labelLon, labelLat);
+        context.setLineDash([]);
+        context.fillStyle = colors.risk();
+        context.font = "700 11px Segoe UI, Microsoft YaHei UI, sans-serif";
+        context.textAlign = "center";
+        context.fillText(`理论平流 ${sector.radiusKm.toFixed(1)} km`, label.x, label.y);
+        context.fillText("研判参考", label.x, label.y + 14);
+        context.restore();
+      }
+
+      function drawEvent(context, layout, event) {
+        const point = layout.project(event.lon, event.lat);
+        context.save();
+        context.fillStyle = colors.risk();
+        context.strokeStyle = "#ffffff";
+        context.lineWidth = 2;
+        context.beginPath(); context.arc(point.x, point.y, 6, 0, Math.PI * 2); context.fill(); context.stroke();
+        context.fillStyle = colors.text();
+        context.font = "700 11px Segoe UI, Microsoft YaHei UI, sans-serif";
+        context.textAlign = "left";
+        context.fillText(event.name, point.x + 9, point.y - 8);
+        context.restore();
+      }
+
+      function drawAsset(context, layout, asset) {
+        const point = layout.project(asset.lon, asset.lat);
+        context.save();
+        context.strokeStyle = colors.cyan();
+        context.fillStyle = css("--surface");
+        context.lineWidth = 2;
+        if (asset.type === "radar") {
+          context.translate(point.x, point.y); context.rotate(Math.PI / 4); context.fillRect(-5, -5, 10, 10); context.strokeRect(-5, -5, 10, 10);
+        } else if (asset.type === "uav") {
+          context.beginPath(); context.moveTo(point.x, point.y - 6); context.lineTo(point.x - 6, point.y + 5); context.lineTo(point.x + 6, point.y + 5); context.closePath(); context.fill(); context.stroke();
+        } else {
+          context.fillRect(point.x - 5, point.y - 5, 10, 10); context.strokeRect(point.x - 5, point.y - 5, 10, 10);
+        }
+        context.restore();
+      }
+
+      function drawMap() {
+        const { context, width, height } = resizeCanvas(elements.mapCanvas);
+        const layout = mapLayout(width, height);
+        mapGeometry = layout;
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = colors.surface();
+        context.fillRect(0, 0, width, height);
+        drawGrid(context, layout);
+        drawGeoLines(context, basemapLines, layout, colors.line(), 1.1);
+        if (taskLines.length) drawGeoLines(context, taskLines, layout, colors.cyan(), 2, true);
+        const frame = currentFrame();
+        if (frame) {
+          const lonSpacing = longitudes.length > 1 ? Math.abs(longitudes[1] - longitudes[0]) : (layout.bounds.maxLon - layout.bounds.minLon) * 0.03;
+          const latSpacing = latitudes.length > 1 ? Math.abs(latitudes[1] - latitudes[0]) : (layout.bounds.maxLat - layout.bounds.minLat) * 0.03;
+          const maximum = analysis.global_stats.p95 || 1;
+          context.save();
+          context.beginPath(); context.rect(layout.plot.x, layout.plot.y, layout.plot.width, layout.plot.height); context.clip();
+          frame.point_index.forEach((pointIndex, index) => {
+            const latIndex = Math.floor(pointIndex / longitudes.length);
+            const lonIndex = pointIndex % longitudes.length;
+            const northwest = layout.project(longitudes[lonIndex] - lonSpacing / 2, latitudes[latIndex] + latSpacing / 2);
+            const southeast = layout.project(longitudes[lonIndex] + lonSpacing / 2, latitudes[latIndex] - latSpacing / 2);
+            const left = Math.min(northwest.x, southeast.x);
+            const top = Math.min(northwest.y, southeast.y);
+            const cellWidth = Math.max(1.2, Math.abs(southeast.x - northwest.x));
+            const cellHeight = Math.max(1.2, Math.abs(southeast.y - northwest.y));
+            context.fillStyle = colorRamp(frame.speed[index], maximum);
+            context.globalAlpha = 0.88;
+            context.fillRect(left, top, cellWidth + 0.6, cellHeight + 0.6);
+            if (frame.quality && frame.quality[index] === 1) {
+              context.globalAlpha = 0.52;
+              context.strokeStyle = colors.amber();
+              context.lineWidth = 1;
+              const step = Math.max(5, Math.min(cellWidth, cellHeight));
+              for (let offset = -cellHeight; offset < cellWidth; offset += step) {
+                context.beginPath(); context.moveTo(left + offset, top + cellHeight); context.lineTo(left + offset + cellHeight, top); context.stroke();
+              }
+            } else if (frame.quality && frame.quality[index] === 0) {
+              context.globalAlpha = 0.72;
+              context.fillStyle = colors.missing();
+              context.fillRect(left, top, cellWidth + 0.6, cellHeight + 0.6);
+            }
+            context.globalAlpha = 1;
+          });
+          const targetArrows = Math.max(30, Math.floor(layout.plot.width * layout.plot.height / 8500));
+          const arrowStep = Math.max(1, Math.ceil(frame.point_index.length / targetArrows));
+          frame.point_index.forEach((pointIndex, index) => {
+            if (index % arrowStep !== 0) return;
+            if (frame.quality && frame.quality[index] === 0) return;
+            const latIndex = Math.floor(pointIndex / longitudes.length);
+            const lonIndex = pointIndex % longitudes.length;
+            const point = layout.project(longitudes[lonIndex], latitudes[latIndex]);
+            drawArrow(context, point.x, point.y, frame.flow_direction[index], Boolean(frame.quality && frame.quality[index] === 1));
+          });
+          context.restore();
+          manifest.events.forEach(event => drawRiskSector(context, layout, event, riskSector(event, frame)));
+          manifest.assets.forEach(asset => drawAsset(context, layout, asset));
+          manifest.events.forEach(event => drawEvent(context, layout, event));
+          if (state.selectedPoint !== null) {
+            const frameIndex = frame.point_index.indexOf(state.selectedPoint);
+            if (frameIndex >= 0) {
+              const latIndex = Math.floor(state.selectedPoint / longitudes.length);
+              const lonIndex = state.selectedPoint % longitudes.length;
+              const point = layout.project(longitudes[lonIndex], latitudes[latIndex]);
+              context.save(); context.strokeStyle = colors.cyan(); context.lineWidth = 3; context.beginPath(); context.arc(point.x, point.y, 10, 0, Math.PI * 2); context.stroke(); context.restore();
+            }
+          }
+        } else {
+          context.fillStyle = colors.muted();
+          context.font = "700 15px Segoe UI, Microsoft YaHei UI, sans-serif";
+          context.textAlign = "center";
+          context.fillText("当前时间高度层无有效风场数据", layout.plot.x + layout.plot.width / 2, layout.plot.y + layout.plot.height / 2);
+        }
+        context.strokeStyle = colors.line(); context.lineWidth = 1; context.strokeRect(layout.plot.x, layout.plot.y, layout.plot.width, layout.plot.height);
+      }
+
+      function chartLayout(width, height) {
+        return { x: 58, y: 14, width: Math.max(10, width - 72), height: Math.max(10, height - 48) };
+      }
+
+      function timeCellBounds(index, plot) {
+        if (times.length === 1) return [plot.x, plot.x + plot.width];
+        const centers = times.map((_, timeIndex) => plot.x + timePosition(timeIndex) / 100 * plot.width);
+        const left = index === 0 ? plot.x : (centers[index - 1] + centers[index]) / 2;
+        const right = index === times.length - 1 ? plot.x + plot.width : (centers[index] + centers[index + 1]) / 2;
+        return [left, right];
+      }
+
+      function heightY(value, plot) {
+        const min = Math.min(...heights);
+        const max = Math.max(...heights);
+        if (max <= min) return plot.y + plot.height / 2;
+        return plot.y + plot.height - (value - min) / (max - min) * plot.height;
+      }
+
+      function drawChartAxes(context, plot, width, height) {
+        context.save();
+        context.strokeStyle = colors.line(); context.fillStyle = colors.muted(); context.lineWidth = 1;
+        context.strokeRect(plot.x, plot.y, plot.width, plot.height);
+        context.font = "10px Segoe UI, Microsoft YaHei UI, sans-serif";
+        context.textAlign = "center"; context.textBaseline = "top";
+        const timeTicks = Math.min(5, times.length);
+        for (let tick = 0; tick < timeTicks; tick += 1) {
+          const index = timeTicks === 1 ? 0 : Math.round(tick / (timeTicks - 1) * (times.length - 1));
+          const x = plot.x + timePosition(index) / 100 * plot.width;
+          context.fillText(times[index].short_label, x, plot.y + plot.height + 7);
+        }
+        context.textAlign = "right"; context.textBaseline = "middle";
+        const minHeight = Math.min(...heights); const maxHeight = Math.max(...heights);
+        for (let tick = 0; tick <= 4; tick += 1) {
+          const value = minHeight + (maxHeight - minHeight) * tick / 4;
+          const y = heightY(value, plot);
+          context.fillText(`${formatNumber(value, 0)} m`, plot.x - 7, y);
+        }
+        context.restore();
+      }
+
+      function drawHeatmap(canvas, values, mode) {
+        const { context, width, height } = resizeCanvas(canvas);
+        const plot = chartLayout(width, height);
+        context.clearRect(0, 0, width, height);
+        context.fillStyle = colors.surface(); context.fillRect(0, 0, width, height);
+        let maximum = 1;
+        if (mode === "speed") maximum = analysis.global_stats.p95 || 1;
+        else maximum = Math.max(1, ...values.flat().filter(value => Number.isFinite(value)));
+        for (let timeIndex = 0; timeIndex < times.length; timeIndex += 1) {
+          const [left, right] = timeCellBounds(timeIndex, plot);
+          for (let heightIndex = 0; heightIndex < heights.length; heightIndex += 1) {
+            const value = values[timeIndex][heightIndex];
+            if (value === null || value === undefined || !Number.isFinite(Number(value)) || Number(value) <= 0 && mode === "coverage") continue;
+            const centerY = heightY(heights[heightIndex], plot);
+            const previous = heightIndex === 0 ? plot.y + plot.height : heightY(heights[heightIndex - 1], plot);
+            const next = heightIndex === heights.length - 1 ? plot.y : heightY(heights[heightIndex + 1], plot);
+            const top = (centerY + next) / 2;
+            const bottom = (centerY + previous) / 2;
+            context.fillStyle = mode === "speed" ? colorRamp(Number(value), maximum) : coverageColor(Number(value) / maximum);
+            context.fillRect(left, top, Math.max(1, right - left + 0.4), Math.max(1, bottom - top + 0.4));
+            if (mode === "coverage" && Number(timeHeight.low_quality_ratio[timeIndex][heightIndex] || 0) > 0.5) {
+              context.save();
+              context.globalAlpha = 0.2;
+              context.fillStyle = colors.amber();
+              context.fillRect(left, top, Math.max(1, right - left + 0.4), Math.max(1, bottom - top + 0.4));
+              context.restore();
+            }
+          }
+        }
+        drawChartAxes(context, plot, width, height);
+        const currentX = plot.x + timePosition(state.time) / 100 * plot.width;
+        const currentY = heightY(heights[state.height], plot);
+        context.save(); context.strokeStyle = colors.risk(); context.lineWidth = 1.5; context.setLineDash([5, 4]);
+        context.beginPath(); context.moveTo(currentX, plot.y); context.lineTo(currentX, plot.y + plot.height); context.stroke();
+        context.beginPath(); context.moveTo(plot.x, currentY); context.lineTo(plot.x + plot.width, currentY); context.stroke(); context.restore();
+      }
+
+      function coverageColor(ratio) {
+        const clamped = Math.max(0, Math.min(1, ratio));
+        const base = resolveTheme() === "light" ? [225, 234, 233] : [38, 55, 61];
+        const target = [35, 190, 181];
+        const rgb = base.map((value, index) => Math.round(value + (target[index] - value) * clamped));
+        return `rgb(${rgb.join(",")})`;
+      }
+
+      function rollingRose() {
+        const currentEpoch = times[state.time].epoch_ms;
+        const windowMs = config.time_window_min * 60000;
+        let candidates = times.map((time, index) => ({ time, index })).filter(item => item.index <= state.time && currentEpoch - item.time.epoch_ms >= 0 && currentEpoch - item.time.epoch_ms <= windowMs);
+        if (candidates.length < 2) return { valid: false, reason: "样本时次不足", sampleCount: 0 };
+        const median = analysis.coordinates.median_time_step_ms || 0;
+        const gapLimit = median > 0 ? median * 1.5 : Infinity;
+        let segmentStart = 0;
+        for (let index = 1; index < candidates.length; index += 1) {
+          if (candidates[index].time.epoch_ms - candidates[index - 1].time.epoch_ms > gapLimit) segmentStart = index;
+        }
+        candidates = candidates.slice(segmentStart);
+        const sectors = Array.from({ length: 16 }, () => [0, 0, 0, 0, 0]);
+        const speedBins = [0, 2, 5, 10, 15, Infinity];
+        let sampleCount = 0;
+        let timeCount = 0;
+        candidates.forEach(candidate => {
+          const frame = frames[`${candidate.index}:${state.height}`];
+          if (!frame) return;
+          timeCount += 1;
+          frame.speed.forEach((speed, index) => {
+            let direction = frame.flow_direction[index];
+            if (state.directionMode === "meteorological") direction = (direction + 180) % 360;
+            const sector = Math.floor(((direction + 11.25) % 360) / 22.5);
+            const bin = speedBins.findIndex((value, binIndex) => binIndex < speedBins.length - 1 && speed >= value && speed < speedBins[binIndex + 1]);
+            if (bin >= 0) sectors[sector][bin] += 1;
+            sampleCount += 1;
+          });
+        });
+        if (timeCount < 2 || sampleCount < 5) return { valid: false, reason: "有效样本不足", sampleCount };
+        return { valid: true, sectors, sampleCount, timeCount };
+      }
+
+      function polarPoint(cx, cy, radius, angle) {
+        const radians = (angle - 90) * Math.PI / 180;
+        return { x: cx + Math.cos(radians) * radius, y: cy + Math.sin(radians) * radius };
+      }
+
+      function sectorPath(cx, cy, inner, outer, start, end) {
+        const p1 = polarPoint(cx, cy, outer, start);
+        const p2 = polarPoint(cx, cy, outer, end);
+        if (inner <= 0) return `M ${cx} ${cy} L ${p1.x} ${p1.y} A ${outer} ${outer} 0 0 1 ${p2.x} ${p2.y} Z`;
+        const p3 = polarPoint(cx, cy, inner, end);
+        const p4 = polarPoint(cx, cy, inner, start);
+        return `M ${p1.x} ${p1.y} A ${outer} ${outer} 0 0 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${inner} ${inner} 0 0 0 ${p4.x} ${p4.y} Z`;
+      }
+
+      function svgElement(name, attributes = {}) {
+        const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+        Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, String(value)));
+        return element;
+      }
+
+      function drawRose() {
+        const svg = elements.windRose;
+        svg.replaceChildren();
+        const rose = rollingRose();
+        const cx = 140; const cy = 112; const radius = 86;
+        [0.25, 0.5, 0.75, 1].forEach(ratio => svg.append(svgElement("circle", { cx, cy, r: radius * ratio, fill: "none", stroke: colors.line(), "stroke-width": 1 })));
+        for (let angle = 0; angle < 360; angle += 45) {
+          const point = polarPoint(cx, cy, radius, angle);
+          svg.append(svgElement("line", { x1: cx, y1: cy, x2: point.x, y2: point.y, stroke: colors.lineSoft(), "stroke-width": 1 }));
+        }
+        const labels = [["N", 0], ["E", 90], ["S", 180], ["W", 270]];
+        labels.forEach(([label, angle]) => {
+          const point = polarPoint(cx, cy, radius + 15, angle);
+          const text = svgElement("text", { x: point.x, y: point.y + 4, fill: colors.text(), "font-size": 11, "font-family": "Segoe UI, sans-serif", "text-anchor": "middle", "font-weight": 700 });
+          text.textContent = label;
+          svg.append(text);
+        });
+        if (!rose.valid) {
+          const text = svgElement("text", { x: cx, y: cy + 4, fill: colors.muted(), "font-size": 12, "font-family": "Segoe UI, Microsoft YaHei UI, sans-serif", "text-anchor": "middle" });
+          text.textContent = rose.reason;
+          svg.append(text);
+          elements.roseInfo.textContent = `${rose.reason} · 样本 ${rose.sampleCount}`;
+          return;
+        }
+        const totals = rose.sectors.map(bins => bins.reduce((sum, value) => sum + value, 0));
+        const maximum = Math.max(...totals, 1);
+        const binColors = ["#b8e5e3", "#6dc9c3", "#2ca9a3", "#087f7a", "#07545a"];
+        rose.sectors.forEach((bins, sectorIndex) => {
+          let inner = 0;
+          bins.forEach((count, binIndex) => {
+            if (!count) return;
+            const outer = inner + count / maximum * radius;
+            svg.append(svgElement("path", { d: sectorPath(cx, cy, inner, outer, sectorIndex * 22.5 - 10, sectorIndex * 22.5 + 10), fill: binColors[binIndex], stroke: css("--surface"), "stroke-width": 0.7 }));
+            inner = outer;
+          });
+        });
+        const dominant = totals.indexOf(Math.max(...totals));
+        elements.roseInfo.textContent = `${config.time_window_min} 分钟滚动窗口 · ${rose.timeCount} 个时次 · ${rose.sampleCount} 个样本 · 主导${state.directionMode === "flow" ? "吹向" : "来向"} ${directionName(dominant * 22.5)}`;
+      }
+
+      function qualityText(frame) {
+        if (analysis.quality_status === "unavailable") return { label: "无逐格质量信息", detail: "请结合现场观测", level: "gray" };
+        if (!frame) return { label: "当前层缺测", detail: "无有效 U/V", level: "gray" };
+        const summary = frame.summary;
+        const missing = summary.quality_missing || 0;
+        const low = summary.quality_low || 0;
+        const acceptable = summary.quality_acceptable || 0;
+        if (missing > 0 && low + acceptable === 0) return { label: "无受支持质量信息", detail: `缺失 ${missing}`, level: "gray" };
+        if (low > acceptable) return { label: "低邻点支持为主", detail: `低支持 ${low} / 可接受 ${acceptable}`, level: "amber" };
+        if (missing > 0) return { label: "部分格点质量缺失", detail: `缺失 ${missing} / 可接受 ${acceptable}`, level: "amber" };
+        return { label: "有可接受邻点支持", detail: `可接受 ${acceptable} / 低支持 ${low}`, level: "good" };
+      }
+
+      function buildBrief(frame) {
+        elements.briefLines.replaceChildren();
+        const lines = [];
+        lines.push({ text: `时刻：${times[state.time].label}，高度：${heightLabel(state.height)}。` });
+        if (!frame) {
+          lines.push({ text: "当前层无有效风场数据；透明区域不表示无风。", className: "warning" });
+        } else {
+          const summary = frame.summary;
+          const hasMeanDirection = summary.flow_direction_mean !== null && summary.flow_direction_mean !== undefined && Number.isFinite(Number(summary.flow_direction_mean));
+          const directionText = hasMeanDirection
+            ? `向${directionName(Number(summary.flow_direction_mean))}扩散`
+            : "方向分散或静风";
+          lines.push({ text: `风向：${directionText}，风速：${formatNumber(summary.speed_p25)}–${formatNumber(summary.speed_p75)} m/s。`, className: "emphasis" });
+          const quality = qualityText(frame);
+          lines.push({ text: `${quality.label}，${quality.detail}。`, className: quality.level === "amber" || quality.level === "gray" ? "warning" : "" });
+          if (manifest.events.length) {
+            const validSectors = manifest.events.filter(event => riskSector(event, frame)).length;
+            lines.push({ text: validSectors ? `${validSectors} 个事件点已生成下风向理论平流研判扇区。` : "事件点附近无满足距离与质量要求的风场，未生成精确扇区。", className: validSectors ? "" : "warning" });
+          }
+        }
+        lines.forEach(line => {
+          const paragraph = document.createElement("p");
+          paragraph.className = `brief-line ${line.className || ""}`;
+          paragraph.textContent = line.text;
+          elements.briefLines.append(paragraph);
+        });
+      }
+
+      function detailRows(frame) {
+        if (!frame) return [["状态", "当前层无数据"], ["来源构成", analysis.source_summary[state.time]?.[state.height] || "未提供"], ["坐标状态", analysis.coordinate_status_summary[state.time]?.[state.height] || "未提供"]];
+        let frameIndex = -1;
+        if (state.selectedPoint !== null) frameIndex = frame.point_index.indexOf(state.selectedPoint);
+        if (frameIndex < 0) {
+          const hasMeanDirection = frame.summary.flow_direction_mean !== null && frame.summary.flow_direction_mean !== undefined && Number.isFinite(Number(frame.summary.flow_direction_mean));
+          const meanDirection = hasMeanDirection
+            ? `${formatNumber(frame.summary.flow_direction_mean, 0)}° ${directionName(Number(frame.summary.flow_direction_mean))}`
+            : "方向分散或静风";
+          return [["选择", "点击地图格点查看"], ["有效格点", String(frame.summary.valid_points)], ["平均风速", `${formatNumber(frame.summary.speed_mean)} m/s`], ["平均吹向", meanDirection], ["来源构成", analysis.source_summary[state.time]?.[state.height] || "未提供"], ["坐标状态", analysis.coordinate_status_summary[state.time]?.[state.height] || "未提供"]];
+        }
+        const latIndex = Math.floor(state.selectedPoint / longitudes.length);
+        const lonIndex = state.selectedPoint % longitudes.length;
+        const quality = frame.quality ? frame.quality[frameIndex] : null;
+        const qualityLabel = quality === null ? "无逐格信息" : quality === 0 ? "缺测" : quality === 1 ? "低邻点支持" : "可接受邻点支持";
+        const neighborCount = frame.neighbor_count?.[frameIndex];
+        const observationDistance = frame.observation_distance_deg?.[frameIndex];
+        const hasNeighborCount = neighborCount !== null && neighborCount !== undefined && Number.isFinite(Number(neighborCount));
+        const hasObservationDistance = observationDistance !== null && observationDistance !== undefined && Number.isFinite(Number(observationDistance));
+        return [["经纬度", `${latitudes[latIndex].toFixed(4)}°N, ${longitudes[lonIndex].toFixed(4)}°E`], ["风速", `${formatNumber(frame.speed[frameIndex], 2)} m/s`], ["实际吹向", `${formatNumber(frame.flow_direction[frameIndex], 1)}° ${directionName(frame.flow_direction[frameIndex])}`], ["U / V", `${formatNumber(frame.u[frameIndex], 2)} / ${formatNumber(frame.v[frameIndex], 2)} m/s`], ["质量", qualityLabel], ["有效邻点", hasNeighborCount ? String(neighborCount) : "未提供"], ["最近观测", hasObservationDistance ? `${formatNumber(Number(observationDistance) * 111, 2)} km` : "未提供"], ["来源构成", analysis.source_summary[state.time]?.[state.height] || "未提供"]];
+      }
+
+      function buildPointDetails(frame) {
+        elements.pointDetails.replaceChildren();
+        detailRows(frame).forEach(([label, value]) => {
+          const term = document.createElement("dt"); term.textContent = label;
+          const detail = document.createElement("dd"); detail.textContent = value;
+          elements.pointDetails.append(term, detail);
+        });
+      }
+
+      function updateStatus(frame) {
+        const quality = qualityText(frame);
+        elements.qualityLabel.textContent = quality.label;
+        elements.qualityDetail.textContent = quality.detail;
+        elements.qualityDot.className = `status-dot ${quality.level === "good" ? "" : quality.level}`;
+        elements.layerSummary.textContent = frame ? `${frame.summary.valid_points} 个有效格点 · ${formatNumber(frame.summary.speed_p25)}–${formatNumber(frame.summary.speed_p75)} m/s` : "无有效风场";
+        elements.heightDatum.textContent = analysis.height_datum === "UNKNOWN" ? "高度基准未知" : analysis.height_datum;
+        elements.timezoneLabel.textContent = times[state.time].timezone;
+        elements.timeValue.textContent = times[state.time].label;
+        elements.mapMeta.textContent = `${times[state.time].label} · ${heightLabel(state.height)} · ${frame ? frame.summary.valid_points : 0} 有效格点`;
+        elements.sourceName.textContent = manifest.source.file_name;
+        elements.legendMaximum.textContent = `统一 P95 ${formatNumber(analysis.global_stats.p95)} m/s`;
+        elements.legendMiddle.textContent = `${formatNumber(analysis.global_stats.p95 / 2)} m/s`;
+        elements.legendEnd.textContent = `${formatNumber(analysis.global_stats.p95)}+ m/s`;
+        elements.methodNote.textContent = manifest.source.method_warning;
+        elements.generatedAt.textContent = `生成时间 ${manifest.metadata.generated_at}`;
+        elements.accessibleSummary.textContent = elements.briefLines.textContent + ` ${quality.label}。`;
+        elements.mapCanvas.setAttribute("aria-label", `水平风场地图，${times[state.time].label}，${heightLabel(state.height)}，${quality.label}`);
+      }
+
+      function animateFrameChange() {
+        if (state.reduceMotion) return;
+        [elements.mapCanvas, elements.profileCanvas, elements.coverageCanvas, elements.windRose].forEach(element => {
+          if (element.animate) element.animate([{ opacity: 0.62 }, { opacity: 1 }], { duration: Math.min(200, playbackDelay() * 0.55), easing: "ease-out" });
+        });
+      }
+
+      function updateControls() {
+        elements.previousTime.disabled = times.length <= 1 || state.time === 0;
+        elements.nextTime.disabled = times.length <= 1 || state.time === times.length - 1;
+        elements.playPause.disabled = times.length <= 1;
+        elements.heightSelect.value = String(state.height);
+        document.querySelectorAll("[data-speed]").forEach(button => button.classList.toggle("active", Number(button.dataset.speed) === state.speed));
+        document.querySelectorAll("[data-direction]").forEach(button => button.classList.toggle("active", button.dataset.direction === state.directionMode));
+        document.querySelectorAll("[data-mobile-tab]").forEach(button => button.classList.toggle("active", button.dataset.mobileTab === state.mobilePanel));
+        document.querySelectorAll("[data-mobile-panel]").forEach(panel => panel.classList.toggle("mobile-active", panel.dataset.mobilePanel === state.mobilePanel));
+        elements.motionToggle.style.color = state.reduceMotion ? colors.amber() : "";
+        elements.motionToggle.setAttribute("aria-pressed", String(state.reduceMotion));
+      }
+
+      function renderAll(animate = false) {
+        applyTheme();
+        const frame = currentFrame();
+        buildTimeline();
+        buildBrief(frame);
+        buildPointDetails(frame);
+        updateStatus(frame);
+        updateControls();
+        drawMap();
+        drawHeatmap(elements.profileCanvas, timeHeight.speed_mean, "speed");
+        drawHeatmap(elements.coverageCanvas, timeHeight.coverage, "coverage");
+        drawRose();
+        writeHash();
+        if (animate) animateFrameChange();
+        document.documentElement.dataset.renderReady = "true";
+        window.__NCV_RENDER_READY__ = true;
+      }
+
+      function mapPointFromEvent(event) {
+        const rect = elements.mapCanvas.getBoundingClientRect();
+        return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      }
+
+      function selectNearestScreenPoint(x, y) {
+        const frame = currentFrame();
+        if (!frame || !mapGeometry) return;
+        let best = null;
+        frame.point_index.forEach((pointIndex, index) => {
+          const latIndex = Math.floor(pointIndex / longitudes.length);
+          const lonIndex = pointIndex % longitudes.length;
+          const point = mapGeometry.project(longitudes[lonIndex], latitudes[latIndex]);
+          const distance = Math.hypot(point.x - x, point.y - y);
+          if (!best || distance < best.distance) best = { pointIndex, distance, index };
+        });
+        state.selectedPoint = best && best.distance <= 28 ? best.pointIndex : null;
+        renderAll(false);
+      }
+
+      function adjustZoom(multiplier) {
+        state.map.zoom = Math.max(1, Math.min(6, state.map.zoom * multiplier));
+        if (state.map.zoom === 1) { state.map.offsetX = 0; state.map.offsetY = 0; }
+        drawMap();
+      }
+
+      function chartSelection(event, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const plot = chartLayout(rect.width, rect.height);
+        const x = Math.max(plot.x, Math.min(plot.x + plot.width, event.clientX - rect.left));
+        const y = Math.max(plot.y, Math.min(plot.y + plot.height, event.clientY - rect.top));
+        let nearestTime = 0;
+        let timeDistance = Infinity;
+        times.forEach((_, index) => {
+          const candidate = plot.x + timePosition(index) / 100 * plot.width;
+          if (Math.abs(candidate - x) < timeDistance) { timeDistance = Math.abs(candidate - x); nearestTime = index; }
+        });
+        const minHeight = Math.min(...heights); const maxHeight = Math.max(...heights);
+        const heightValue = maxHeight <= minHeight ? minHeight : minHeight + (1 - (y - plot.y) / plot.height) * (maxHeight - minHeight);
+        let nearestHeight = 0;
+        let heightDistance = Infinity;
+        heights.forEach((value, index) => {
+          if (Math.abs(value - heightValue) < heightDistance) { heightDistance = Math.abs(value - heightValue); nearestHeight = index; }
+        });
+        state.time = nearestTime; state.height = nearestHeight; state.selectedPoint = null;
+        if (![...elements.heightSelect.options].some(option => Number(option.value) === nearestHeight)) buildHeightOptions();
+        renderAll(true);
+      }
+
+      elements.previousTime.addEventListener("click", () => setTime(state.time - 1));
+      elements.nextTime.addEventListener("click", () => setTime(state.time + 1));
+      elements.playPause.addEventListener("click", () => setPlaying(!state.playing));
+      elements.heightSelect.addEventListener("change", event => setHeight(event.target.value));
+      elements.themeSelect.addEventListener("change", event => { state.theme = event.target.value; renderAll(false); });
+      elements.motionToggle.addEventListener("click", () => { state.reduceMotion = !state.reduceMotion; updateControls(); });
+      elements.zoomIn.addEventListener("click", () => adjustZoom(1.35));
+      elements.zoomOut.addEventListener("click", () => adjustZoom(1 / 1.35));
+      elements.zoomReset.addEventListener("click", () => { state.map = { zoom: 1, offsetX: 0, offsetY: 0 }; drawMap(); });
+      document.querySelectorAll("[data-speed]").forEach(button => button.addEventListener("click", () => { state.speed = Number(button.dataset.speed); updateControls(); schedulePlayback(); }));
+      document.querySelectorAll("[data-direction]").forEach(button => button.addEventListener("click", () => { state.directionMode = button.dataset.direction; drawRose(); updateControls(); writeHash(); }));
+      document.querySelectorAll("[data-mobile-tab]").forEach(button => button.addEventListener("click", () => { state.mobilePanel = button.dataset.mobileTab; updateControls(); writeHash(); setTimeout(() => renderAll(false), 0); }));
+
+      elements.mapCanvas.addEventListener("wheel", event => { event.preventDefault(); adjustZoom(event.deltaY < 0 ? 1.18 : 1 / 1.18); }, { passive: false });
+      elements.mapCanvas.addEventListener("pointerdown", event => {
+        const point = mapPointFromEvent(event);
+        dragState = { pointerId: event.pointerId, startX: point.x, startY: point.y, offsetX: state.map.offsetX, offsetY: state.map.offsetY, moved: false };
+        elements.mapCanvas.setPointerCapture(event.pointerId);
+      });
+      elements.mapCanvas.addEventListener("pointermove", event => {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        const point = mapPointFromEvent(event);
+        const dx = point.x - dragState.startX; const dy = point.y - dragState.startY;
+        if (Math.hypot(dx, dy) > 4) dragState.moved = true;
+        if (dragState.moved && state.map.zoom > 1) { state.map.offsetX = dragState.offsetX + dx; state.map.offsetY = dragState.offsetY + dy; drawMap(); }
+      });
+      elements.mapCanvas.addEventListener("pointerup", event => {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        const point = mapPointFromEvent(event);
+        if (!dragState.moved) selectNearestScreenPoint(point.x, point.y);
+        dragState = null;
+      });
+      elements.mapCanvas.addEventListener("pointercancel", () => { dragState = null; });
+      elements.mapStage.addEventListener("touchstart", event => {
+        if (event.touches.length !== 2) return;
+        event.preventDefault();
+        dragState = null;
+        const dx = event.touches[1].clientX - event.touches[0].clientX;
+        const dy = event.touches[1].clientY - event.touches[0].clientY;
+        touchPinch = { distance: Math.hypot(dx, dy), zoom: state.map.zoom };
+      }, { passive: false });
+      elements.mapStage.addEventListener("touchmove", event => {
+        if (!touchPinch || event.touches.length !== 2) return;
+        event.preventDefault();
+        const dx = event.touches[1].clientX - event.touches[0].clientX;
+        const dy = event.touches[1].clientY - event.touches[0].clientY;
+        state.map.zoom = Math.max(1, Math.min(6, touchPinch.zoom * Math.hypot(dx, dy) / touchPinch.distance));
+        drawMap();
+      }, { passive: false });
+      elements.mapStage.addEventListener("touchend", event => { if (event.touches.length < 2) touchPinch = null; });
+      elements.mapCanvas.addEventListener("keydown", event => {
+        const frame = currentFrame();
+        if (["+", "="].includes(event.key)) { event.preventDefault(); event.stopPropagation(); adjustZoom(1.25); return; }
+        if (event.key === "-") { event.preventDefault(); event.stopPropagation(); adjustZoom(0.8); return; }
+        if (!frame || !["ArrowUp", "ArrowDown"].includes(event.key)) return;
+        event.preventDefault(); event.stopPropagation();
+        let index = state.selectedPoint === null ? -1 : frame.point_index.indexOf(state.selectedPoint);
+        index += event.key === "ArrowDown" ? 1 : -1;
+        index = (index + frame.point_index.length) % frame.point_index.length;
+        state.selectedPoint = frame.point_index[index];
+        renderAll(false);
+      });
+      elements.profileCanvas.addEventListener("click", event => chartSelection(event, elements.profileCanvas));
+      elements.coverageCanvas.addEventListener("click", event => chartSelection(event, elements.coverageCanvas));
+      document.addEventListener("keydown", event => {
+        if (["SELECT", "INPUT", "BUTTON"].includes(document.activeElement?.tagName)) return;
+        if (event.code === "Space") { event.preventDefault(); setPlaying(!state.playing); }
+        if (event.key === "ArrowLeft") setTime(state.time - 1);
+        if (event.key === "ArrowRight") setTime(state.time + 1);
+      });
+      window.addEventListener("hashchange", () => { parseHash(); buildHeightOptions(); renderAll(false); });
+      window.addEventListener("resize", () => renderAll(false));
+      if (window.ResizeObserver) {
+        const observer = new ResizeObserver(() => renderAll(false));
+        observer.observe(elements.mapStage);
+      }
+
+      parseHash();
+      applyTheme();
+      buildHeightOptions();
+      renderAll(false);
+    })();
+  </script>
+</body>
+</html>
