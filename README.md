@@ -1,4 +1,4 @@
-# nc_visual_cli v2
+# nc_visual_cli 
 
 [![tests](https://github.com/maomao3334/nc_visual_cli/actions/workflows/tests.yml/badge.svg)](https://github.com/maomao3334/nc_visual_cli/actions/workflows/tests.yml)
 
